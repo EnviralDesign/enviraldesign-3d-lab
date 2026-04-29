@@ -855,7 +855,7 @@ def build_ui():
                             label="TRELLIS pipeline",
                             value="512",
                             scale=2,
-                            info="Model path through TRELLIS. Cascade runs start lower and refine shape at higher resolution.",
+                            info="Stage-2 shape path. 512/1024 generate directly; cascade starts at 512 then refines to 1024 or 1536 and uses Cascade max tokens.",
                         )
                     model = gr.Textbox(
                         label="TRELLIS model",
@@ -883,7 +883,7 @@ def build_ui():
                             label="Sparse grid resolution",
                             value=32,
                             precision=0,
-                            info="Stage-1 occupancy grid resolution. 0 uses TRELLIS defaults for the selected pipeline.",
+                            info="Stage-1 coarse occupancy grid resolution before shape generation. This is separate from the 512/1024/1536 Stage-2 shape grid.",
                         )
                         stage1_max_voxels = gr.Number(
                             label="Preview voxel cap",
@@ -905,7 +905,7 @@ def build_ui():
                         label="Cascade max tokens",
                         value=12288,
                         precision=0,
-                        info="Token cap used during cascade shape upsampling. Higher can preserve more structure but costs VRAM.",
+                        info="Only affects 1024_cascade and 1536_cascade. Caps high-res Stage-2 latent tokens during cascade refinement; higher can retain more thin/detail structure but raises VRAM/time sharply.",
                     )
                     with gr.Row():
                         shape_steps = gr.Number(label="Steps", value=12, precision=0, info="Shape latent diffusion steps.")
