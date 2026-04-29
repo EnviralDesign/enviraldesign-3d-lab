@@ -284,10 +284,17 @@ def run_optional_modules(args, image_path: str, stage_paths: dict[str, str], fin
         run_ultrashape_module(args, image_path, input_mesh, f"ultrashape_{args.ultrashape_mode.replace('-', '_')}")
 
 
+def trellis_internal_to_glb_vertices(vertices: np.ndarray) -> np.ndarray:
+    vertices = vertices.copy()
+    vertices[:, 1], vertices[:, 2] = vertices[:, 2].copy(), -vertices[:, 1].copy()
+    return vertices
+
+
 def export_basic_mesh(mesh, path: str, color=(210, 210, 210, 255)) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     vertices = mesh.vertices.detach().float().cpu().numpy()
     faces = mesh.faces.detach().cpu().numpy()
+    vertices = trellis_internal_to_glb_vertices(vertices)
     tri = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
     tri.visual.vertex_colors = np.tile(np.array(color, dtype=np.uint8), (len(vertices), 1))
     tri.export(path)
@@ -334,6 +341,7 @@ def export_sparse_structure(coords: torch.Tensor, resolution: int, path: str, ma
     vertices = (centers[:, None, :] + corners[None, :, :]).reshape(-1, 3)
     offsets = (np.arange(len(centers), dtype=np.int64) * 8)[:, None, None]
     faces = (cube_faces[None, :, :] + offsets).reshape(-1, 3)
+    vertices = trellis_internal_to_glb_vertices(vertices)
     tri = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
     tri.visual.vertex_colors = np.tile(np.array([90, 170, 255, 210], dtype=np.uint8), (len(vertices), 1))
     tri.export(path)
