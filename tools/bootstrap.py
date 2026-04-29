@@ -24,11 +24,28 @@ DEFAULT_ULTRASHAPE_MODEL = "infinith/UltraShape"
 DEFAULT_ULTRASHAPE_FILE = "ultrashape_v1.pt"
 DEFAULT_ULTRASHAPE_DIR = ROOT / "integrations" / "UltraShape-1.0" / "checkpoints"
 NATIVE_BUILD_ROOT = ROOT / ".native-build"
+VSDEVCMD_CANDIDATES = [
+    Path(r"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"),
+    Path(r"C:\Program Files\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"),
+    Path(r"C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\Tools\VsDevCmd.bat"),
+    Path(r"C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat"),
+]
 
 
 def run(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
     print("+", " ".join(cmd), flush=True)
     subprocess.run(cmd, cwd=ROOT, env=env, check=True)
+
+
+def run_in_vsdev(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
+    vsdev = next((path for path in VSDEVCMD_CANDIDATES if path.exists()), None)
+    if vsdev is None:
+        raise SystemExit(
+            "Could not find Visual Studio 2022 VsDevCmd.bat. Install Visual Studio C++ build tools or run from a Developer Command Prompt."
+        )
+    command = f'call "{vsdev}" -arch=amd64 -host_arch=amd64 && ' + subprocess.list2cmdline(cmd)
+    print("+", command, flush=True)
+    subprocess.run(command, cwd=ROOT, env=env, shell=True, check=True)
 
 
 def ensure_venv() -> None:
@@ -66,6 +83,7 @@ def uninstall_native_extensions() -> None:
         "flex-gemm",
         "nvdiffrast",
         "nvdiffrec-render",
+        "cubvh",
     ]
     print("+ uv pip uninstall --python", VENV_PYTHON, " ".join(packages), flush=True)
     subprocess.run(
@@ -85,7 +103,18 @@ def uninstall_native_extensions() -> None:
 def clone_or_update(repo: str, dest: Path, *, branch: str | None = None, recursive: bool = False) -> None:
     if dest.exists():
         run(["git", "-C", str(dest), "fetch", "--all", "--tags"])
-        run(["git", "-C", str(dest), "pull", "--ff-only"])
+        if branch:
+            run(["git", "-C", str(dest), "checkout", branch])
+            return
+        current_branch = subprocess.run(
+            ["git", "-C", str(dest), "branch", "--show-current"],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout.strip()
+        if current_branch:
+            run(["git", "-C", str(dest), "pull", "--ff-only"])
         return
 
     cmd = ["git", "clone"]
@@ -156,25 +185,27 @@ def build_windows_native(args: argparse.Namespace) -> None:
             "--python",
             str(VENV_PYTHON),
             "plyfile>=1.1.3",
+            "pybind11>=2.13",
             "triton-windows==3.2.0.post21",
             "pip",
         ]
     )
 
     clone_or_update("https://github.com/NVlabs/nvdiffrast.git", NATIVE_BUILD_ROOT / "nvdiffrast", branch="v0.4.0")
-    install_path_no_isolation(NATIVE_BUILD_ROOT / "nvdiffrast", env=env)
+    install_path_no_isolation(NATIVE_BUILD_ROOT / "nvdiffrast", env=env, no_deps=True)
 
     clone_or_update("https://github.com/JeffreyXiang/nvdiffrec.git", NATIVE_BUILD_ROOT / "nvdiffrec", branch="renderutils")
-    install_path_no_isolation(NATIVE_BUILD_ROOT / "nvdiffrec", env=env)
+    install_path_no_isolation(NATIVE_BUILD_ROOT / "nvdiffrec", env=env, no_deps=True)
 
     clone_or_update("https://github.com/JeffreyXiang/CuMesh.git", NATIVE_BUILD_ROOT / "CuMesh", recursive=True)
-    install_path_no_isolation(NATIVE_BUILD_ROOT / "CuMesh", env=env)
+    install_path_no_isolation(NATIVE_BUILD_ROOT / "CuMesh", env=env, no_deps=True)
 
     clone_or_update("https://github.com/JeffreyXiang/FlexGEMM.git", NATIVE_BUILD_ROOT / "FlexGEMM", recursive=True)
     patch_flexgemm_windows_source(NATIVE_BUILD_ROOT / "FlexGEMM")
-    install_path_no_isolation(NATIVE_BUILD_ROOT / "FlexGEMM", env=env)
+    install_path_no_isolation(NATIVE_BUILD_ROOT / "FlexGEMM", env=env, no_deps=True)
 
     install_path_no_isolation(ROOT / "o-voxel", env=env, no_deps=True)
+    install_cubvh(env)
 
     prefetch_aux_models(args)
     download_ultrashape(args)
@@ -267,6 +298,28 @@ def build_native(args: argparse.Namespace) -> None:
         f"PIP_NO_CACHE_DIR=1 bash setup.sh {' '.join(setup_flags)}"
     )
     run(["bash", "-lc", shell], env=env)
+    install_cubvh(env)
+
+
+def install_cubvh(env: dict[str, str]) -> None:
+    """Build cubvh without letting its loose deps replace the project torch stack."""
+    NATIVE_BUILD_ROOT.mkdir(exist_ok=True)
+    clone_or_update("https://github.com/ashawkey/cubvh.git", NATIVE_BUILD_ROOT / "cubvh", recursive=True)
+    if os.name == "nt":
+        cmd = [
+            "uv",
+            "pip",
+            "install",
+            "--python",
+            str(VENV_PYTHON),
+            "--no-build-isolation",
+            "--force-reinstall",
+            "--no-deps",
+            str(NATIVE_BUILD_ROOT / "cubvh"),
+        ]
+        run_in_vsdev(cmd, env=env)
+    else:
+        install_path_no_isolation(NATIVE_BUILD_ROOT / "cubvh", env=env, no_deps=True)
 
 
 def smoke_torch() -> None:
@@ -291,11 +344,15 @@ def smoke_imports() -> None:
         "cumesh",
         "o_voxel",
         "flex_gemm",
+        "cubvh",
         "trellis2.pipelines.trellis2_image_to_3d",
+        "ultrashape.models.autoencoders.surface_extractors",
         "tools.remote_launcher",
     ])
     code = f"""
 import importlib
+import sys
+sys.path.insert(0, {str(ROOT / "integrations" / "UltraShape-1.0")!r})
 failed = []
 for module in {modules}:
     try:
