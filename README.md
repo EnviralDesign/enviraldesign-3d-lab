@@ -41,10 +41,12 @@ Override it with `TRELLIS_DINOV3_MODEL` or
 `uv run ed3d-bootstrap hf-models --dinov3-model <repo>` if a better mirror is
 needed later.
 
-On Blackwell, the bootstrap installs `flash-attn-4[cu13]`. The remote launcher
-auto-selects dense attention in this order: FlashAttention-4, FlashAttention-3,
-FlashAttention-2, xFormers, then PyTorch SDPA. Sparse attention currently stays
-on xFormers.
+On Blackwell, bootstrap removes incompatible FlashAttention packages before
+installing xFormers. FlashAttention-4 currently shadows modules that xFormers
+imports in this stack, so it is kept out of the default setup until that is
+resolved upstream. The remote launcher auto-selects dense attention in this
+order: FlashAttention-3, FlashAttention-2, xFormers, then PyTorch SDPA. Sparse
+attention currently stays on xFormers.
 
 `uv run bootstrap` also downloads the UltraShape checkpoint into
 `integrations/UltraShape-1.0/checkpoints/`. If you need to resume only that

@@ -20,7 +20,6 @@ def choose_dense_attention_backend() -> str:
         return requested
 
     for backend, module in (
-        ("flash_attn_4", "flash_attn.cute"),
         ("flash_attn_3", "flash_attn_interface"),
         ("flash_attn", "flash_attn"),
         ("xformers", "xformers.ops"),

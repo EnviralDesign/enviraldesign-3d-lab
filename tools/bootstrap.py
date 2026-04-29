@@ -37,9 +37,29 @@ def ensure_venv() -> None:
         )
 
 
+def remove_conflicting_flash_attention() -> None:
+    """Remove FlashAttention packages that can shadow modules xFormers imports."""
+    ensure_venv()
+    print("+ uv pip uninstall --python", VENV_PYTHON, "flash-attn flash-attn-4", flush=True)
+    subprocess.run(
+        [
+            "uv",
+            "pip",
+            "uninstall",
+            "--python",
+            str(VENV_PYTHON),
+            "flash-attn",
+            "flash-attn-4",
+        ],
+        cwd=ROOT,
+        check=False,
+    )
+
+
 def install_blackwell_torch(args: argparse.Namespace) -> None:
     """Install a Blackwell-capable torch stack into the existing venv."""
     ensure_venv()
+    remove_conflicting_flash_attention()
     run(
         [
             "uv",
@@ -68,7 +88,7 @@ def install_blackwell_torch(args: argparse.Namespace) -> None:
 
 
 def install_flash_attention(args: argparse.Namespace) -> None:
-    """Install the dense FlashAttention package for this GPU node."""
+    """Install an experimental dense FlashAttention package for this GPU node."""
     ensure_venv()
     run(
         [
@@ -221,7 +241,6 @@ def smoke(args: argparse.Namespace | None = None) -> None:
 
 def all_lightning(args: argparse.Namespace) -> None:
     install_blackwell_torch(args)
-    install_flash_attention(args)
     build_native(args)
     prefetch_aux_models(args)
     download_ultrashape(args)
@@ -240,7 +259,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_native_args(native)
     native.set_defaults(func=build_native)
 
-    flash = sub.add_parser("flash-attention", help="Install dense FlashAttention package.")
+    flash = sub.add_parser("flash-attention", help="Install experimental dense FlashAttention package.")
     add_flash_attention_args(flash)
     flash.set_defaults(func=install_flash_attention)
 
@@ -257,7 +276,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     all_parser = sub.add_parser("lightning-all", help="Blackwell torch + native build + smoke.")
     add_blackwell_args(all_parser)
-    add_flash_attention_args(all_parser)
     add_native_args(all_parser)
     add_hf_model_args(all_parser)
     add_ultrashape_args(all_parser)
@@ -278,7 +296,7 @@ def add_flash_attention_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--flash-attention",
         default="flash-attn-4[cu13]",
-        help="Dense attention package. FlashAttention-4 with cu13 is the default for Blackwell Lightning nodes.",
+        help="Experimental dense attention package. Not used by default because FlashAttention-4 currently breaks xFormers imports in this stack.",
     )
 
 
