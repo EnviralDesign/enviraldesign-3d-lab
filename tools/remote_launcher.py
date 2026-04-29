@@ -13,6 +13,35 @@ import gradio as gr
 ROOT = Path(__file__).resolve().parents[1]
 RUN_ROOT = ROOT / "tmp" / "remote-runs"
 
+RUN_LOG_AUTOSCROLL_JS = r"""
+() => {
+  const scrollRunLog = () => {
+    const root = document.getElementById("run-log");
+    const textarea = root?.querySelector("textarea");
+    if (textarea) {
+      textarea.scrollTop = textarea.scrollHeight;
+    }
+  };
+
+  const attachRunLogObserver = () => {
+    const root = document.getElementById("run-log");
+    if (!root || root.dataset.autoscrollAttached === "true") {
+      return;
+    }
+    root.dataset.autoscrollAttached = "true";
+    const observer = new MutationObserver(() => requestAnimationFrame(scrollRunLog));
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    root.addEventListener("input", scrollRunLog);
+    scrollRunLog();
+  };
+
+  const bootObserver = new MutationObserver(attachRunLogObserver);
+  bootObserver.observe(document.body, { childList: true, subtree: true });
+  attachRunLogObserver();
+  setInterval(scrollRunLog, 1000);
+}
+"""
+
 
 def choose_dense_attention_backend() -> str:
     requested = os.environ.get("ATTN_BACKEND")
@@ -1083,6 +1112,7 @@ def main():
         server_port=args.port,
         share=args.share,
         allowed_paths=[str(ROOT)],
+        js=RUN_LOG_AUTOSCROLL_JS,
     )
 
 
@@ -1097,4 +1127,5 @@ def dev_main():
         server_port=7860,
         share=False,
         allowed_paths=[str(ROOT)],
+        js=RUN_LOG_AUTOSCROLL_JS,
     )
