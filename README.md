@@ -46,6 +46,14 @@ auto-selects dense attention in this order: FlashAttention-4, FlashAttention-3,
 FlashAttention-2, xFormers, then PyTorch SDPA. Sparse attention currently stays
 on xFormers.
 
+`ed3d-bootstrap lightning-all` also downloads the UltraShape checkpoint into
+`integrations/UltraShape-1.0/checkpoints/`. If you need to resume only that
+part, run:
+
+```bash
+uv run --no-sync ed3d-bootstrap ultrashape-weights
+```
+
 CLI image-to-3D wrapper:
 
 ```bash

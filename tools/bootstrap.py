@@ -20,6 +20,9 @@ VENV_PYTHON = ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bi
 DEFAULT_DINOV3_MODEL = "camenduru/dinov3-vitl16-pretrain-lvd1689m"
 DEFAULT_REMBG_MODEL = "camenduru/RMBG-2.0"
 DEFAULT_REMBG_ALLOW = "onnx/model_quantized.onnx"
+DEFAULT_ULTRASHAPE_MODEL = "infinith/UltraShape"
+DEFAULT_ULTRASHAPE_FILE = "ultrashape_v1.pt"
+DEFAULT_ULTRASHAPE_DIR = ROOT / "integrations" / "UltraShape-1.0" / "checkpoints"
 
 
 def run(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
@@ -184,6 +187,31 @@ hf_hub_download(rembg_model, rembg_allow)
     run([str(VENV_PYTHON), "-c", code])
 
 
+def download_ultrashape(args: argparse.Namespace) -> None:
+    """Download the UltraShape checkpoint into the expected local path."""
+    ensure_venv()
+    local_dir = Path(args.local_dir)
+    if not local_dir.is_absolute():
+        local_dir = ROOT / local_dir
+    local_dir.mkdir(parents=True, exist_ok=True)
+
+    code = """
+from pathlib import Path
+from huggingface_hub import hf_hub_download
+
+repo_id = {repo_id!r}
+filename = {filename!r}
+local_dir = {local_dir!r}
+path = hf_hub_download(repo_id, filename, local_dir=local_dir)
+print(f"UltraShape checkpoint: {{path}}")
+""".format(
+        repo_id=args.repo_id,
+        filename=args.filename,
+        local_dir=str(local_dir),
+    )
+    run([str(VENV_PYTHON), "-c", code])
+
+
 def smoke(args: argparse.Namespace | None = None) -> None:
     smoke_torch()
     smoke_imports()
@@ -194,6 +222,7 @@ def all_lightning(args: argparse.Namespace) -> None:
     install_flash_attention(args)
     build_native(args)
     prefetch_aux_models(args)
+    download_ultrashape(args)
     smoke(args)
 
 
@@ -220,11 +249,16 @@ def build_parser() -> argparse.ArgumentParser:
     add_hf_model_args(hf_parser)
     hf_parser.set_defaults(func=prefetch_aux_models)
 
+    ultra_parser = sub.add_parser("ultrashape-weights", help="Download UltraShape checkpoint.")
+    add_ultrashape_args(ultra_parser)
+    ultra_parser.set_defaults(func=download_ultrashape)
+
     all_parser = sub.add_parser("lightning-all", help="Blackwell torch + native build + smoke.")
     add_blackwell_args(all_parser)
     add_flash_attention_args(all_parser)
     add_native_args(all_parser)
     add_hf_model_args(all_parser)
+    add_ultrashape_args(all_parser)
     all_parser.set_defaults(func=all_lightning)
 
     return parser
@@ -279,6 +313,24 @@ def add_hf_model_args(parser: argparse.ArgumentParser) -> None:
         "--rembg-allow",
         default=DEFAULT_REMBG_ALLOW,
         help="RMBG file to prefetch from --rembg-model.",
+    )
+
+
+def add_ultrashape_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--repo-id",
+        default=DEFAULT_ULTRASHAPE_MODEL,
+        help="Hugging Face repo containing the UltraShape checkpoint.",
+    )
+    parser.add_argument(
+        "--filename",
+        default=DEFAULT_ULTRASHAPE_FILE,
+        help="UltraShape checkpoint filename in --repo-id.",
+    )
+    parser.add_argument(
+        "--local-dir",
+        default=str(DEFAULT_ULTRASHAPE_DIR),
+        help="Directory where the UltraShape checkpoint should be stored.",
     )
 
 

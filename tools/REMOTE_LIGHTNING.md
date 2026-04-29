@@ -27,8 +27,8 @@ Recommended:
    - `integrations/README.md`
    - the UltraShape/FaithC integration patches
 3. Do not push large weights such as `ultrashape_v1.pt`.
-4. On Lightning, clone the repo, run the bootstrap/setup, then download weights
-   from Hugging Face directly on the node.
+4. On Lightning, clone the repo and run the bootstrap/setup. Large weights are
+   downloaded from Hugging Face directly on the node.
 
 ## Lightning Setup Sketch
 
@@ -37,15 +37,7 @@ git clone <repo-url> TRELLIS.2
 cd TRELLIS.2
 uv sync
 uv run ed3d-bootstrap lightning-all
-python - <<'PY'
-from huggingface_hub import hf_hub_download
-hf_hub_download(
-    "infinith/UltraShape",
-    "ultrashape_v1.pt",
-    local_dir="integrations/UltraShape-1.0/checkpoints",
-)
-PY
-uv run --no-sync ed3d-remote-lab --host 0.0.0.0 --port 7860
+uv run --no-sync dev
 ```
 
 Why `--no-sync` on launch: the lockfile targets the local RTX 5000/RTX 3070
@@ -74,6 +66,8 @@ It does the following:
   this repo redirects that at runtime to
   `camenduru/dinov3-vitl16-pretrain-lvd1689m` unless `TRELLIS_DINOV3_MODEL` is
   set.
+- downloads `infinith/UltraShape/ultrashape_v1.pt` into
+  `integrations/UltraShape-1.0/checkpoints/`
 - runs torch CUDA and import smoke tests
 
 Individual steps are available if you need to resume after an interruptible
@@ -84,6 +78,7 @@ uv run ed3d-bootstrap blackwell-torch
 uv run --no-sync ed3d-bootstrap flash-attention
 uv run --no-sync ed3d-bootstrap native
 uv run --no-sync ed3d-bootstrap hf-models
+uv run --no-sync ed3d-bootstrap ultrashape-weights
 uv run --no-sync ed3d-bootstrap smoke
 ```
 
