@@ -77,6 +77,8 @@ def install_flash_attention(args: argparse.Namespace) -> None:
             "install",
             "--python",
             str(VENV_PYTHON),
+            "--prerelease",
+            "allow",
             args.flash_attention,
         ]
     )
