@@ -13,6 +13,12 @@ uv sync
 Remote UI:
 
 ```bash
+uv run dev
+```
+
+Equivalent explicit command:
+
+```bash
 uv run ed3d-remote-lab --host 0.0.0.0 --port 7860
 ```
 

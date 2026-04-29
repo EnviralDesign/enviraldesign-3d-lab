@@ -466,3 +466,13 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def dev_main():
+    app = build_ui()
+    app.queue(default_concurrency_limit=1).launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        share=False,
+        allowed_paths=[str(ROOT)],
+    )
