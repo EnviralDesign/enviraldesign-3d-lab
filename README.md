@@ -65,6 +65,19 @@ CLI image-to-3D wrapper:
 uv run ed3d-image-to-3d assets/example_image/T.png --out tmp/sample.glb
 ```
 
+Experimental ROI zoom/enhance sidecar:
+
+```bash
+uv run --no-sync ed3d-roi-enhance --mesh path/to/stage2_shape.glb --out-dir tmp/roi-test --label face --mode inspect
+uv run --no-sync ed3d-roi-enhance --mesh path/to/stage2_shape.glb --out-dir tmp/roi-test --label face --mode ultrashape --image path/to/input.png --roi-center 0.5,0.82,0.5 --roi-size 0.46,0.34,0.46
+```
+
+The Gradio lab exposes the same flow under **Experimental: ROI zoom/enhance**.
+`inspect` emits a cropped ROI, a context crop, and a highlighted overlay.
+`ultrashape` refines that crop, inverse-transforms it back into the source mesh
+coordinate frame, and writes a crude merged preview. The merged preview is a
+diagnostic artifact, not a production-quality stitched mesh yet.
+
 Large model weights are intentionally not committed. See
 [`tools/REMOTE_LIGHTNING.md`](tools/REMOTE_LIGHTNING.md) for Lightning setup and
 UltraShape checkpoint download notes.

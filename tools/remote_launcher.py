@@ -16,22 +16,26 @@ RUN_ROOT = ROOT / "tmp" / "remote-runs"
 RUN_LOG_AUTOSCROLL_JS = r"""
 () => {
   const scrollRunLog = () => {
-    const root = document.getElementById("run-log");
-    const textarea = root?.querySelector("textarea");
-    if (textarea) {
-      textarea.scrollTop = textarea.scrollHeight;
-    }
+    ["run-log", "roi-log"].forEach((id) => {
+      const root = document.getElementById(id);
+      const textarea = root?.querySelector("textarea");
+      if (textarea) {
+        textarea.scrollTop = textarea.scrollHeight;
+      }
+    });
   };
 
   const attachRunLogObserver = () => {
-    const root = document.getElementById("run-log");
-    if (!root || root.dataset.autoscrollAttached === "true") {
-      return;
-    }
-    root.dataset.autoscrollAttached = "true";
-    const observer = new MutationObserver(() => requestAnimationFrame(scrollRunLog));
-    observer.observe(root, { childList: true, subtree: true, characterData: true });
-    root.addEventListener("input", scrollRunLog);
+    ["run-log", "roi-log"].forEach((id) => {
+      const root = document.getElementById(id);
+      if (!root || root.dataset.autoscrollAttached === "true") {
+        return;
+      }
+      root.dataset.autoscrollAttached = "true";
+      const observer = new MutationObserver(() => requestAnimationFrame(scrollRunLog));
+      observer.observe(root, { childList: true, subtree: true, characterData: true });
+      root.addEventListener("input", scrollRunLog);
+    });
     scrollRunLog();
   };
 
@@ -474,6 +478,145 @@ def add_artifact(path: str, label: str, artifacts: list[str], labels: dict[str, 
 
 def select_artifact(path: str | None):
     return path or None
+
+
+ROI_PRESETS = {
+    "Head / face": ((0.5, 0.82, 0.5), (0.46, 0.34, 0.46)),
+    "Hair / head silhouette": ((0.5, 0.86, 0.5), (0.62, 0.34, 0.62)),
+    "Torso": ((0.5, 0.58, 0.5), (0.62, 0.38, 0.52)),
+    "Hands / lower arms": ((0.5, 0.42, 0.5), (0.9, 0.34, 0.65)),
+    "Legs / feet": ((0.5, 0.2, 0.5), (0.72, 0.36, 0.54)),
+    "Custom": ((0.5, 0.82, 0.5), (0.46, 0.34, 0.46)),
+}
+
+
+def apply_roi_preset(name: str):
+    center, size = ROI_PRESETS[name]
+    return (*center, *size)
+
+
+def run_roi_enhance(
+    source_mesh,
+    image_file,
+    gpu,
+    roi_mode,
+    roi_label,
+    roi_center_x,
+    roi_center_y,
+    roi_center_z,
+    roi_size_x,
+    roi_size_y,
+    roi_size_z,
+    roi_context,
+    roi_fallback_faces,
+    seed,
+    ultra_steps,
+    ultra_latents,
+    ultra_chunk,
+    ultra_octree,
+    ultra_scale,
+    ultra_low_vram,
+    ultra_remove_bg,
+):
+    if not source_mesh:
+        yield "Choose a GLB in View artifact first.", None, [], gr.update(choices=[], value=None)
+        return
+    if roi_mode == "ultrashape" and image_file is None:
+        yield "UltraShape ROI refinement needs the original input image.", None, [], gr.update(choices=[], value=None)
+        return
+
+    RUN_ROOT.mkdir(parents=True, exist_ok=True)
+    source_path = Path(source_mesh)
+    run_id = time.strftime("%Y%m%d_%H%M%S")
+    safe_label = "".join(c if c.isalnum() or c in "._-" else "_" for c in (roi_label or "roi")).strip("_") or "roi"
+    out_dir = RUN_ROOT / f"{run_id}_{source_path.stem}_{safe_label}_roi"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    image_path = image_file.name if hasattr(image_file, "name") else str(image_file) if image_file else None
+    cmd = [
+        sys.executable,
+        "-u",
+        str(ROOT / "tools" / "roi_enhance.py"),
+        "--mesh",
+        abs_path(source_path),
+        "--out-dir",
+        abs_path(out_dir),
+        "--label",
+        safe_label,
+        "--mode",
+        roi_mode,
+        "--roi-center",
+        f"{float(roi_center_x)},{float(roi_center_y)},{float(roi_center_z)}",
+        "--roi-size",
+        f"{float(roi_size_x)},{float(roi_size_y)},{float(roi_size_z)}",
+        "--context-multiplier",
+        str(float(roi_context)),
+        "--fallback-faces",
+        str(int(roi_fallback_faces)),
+        "--seed",
+        str(int(seed)),
+        "--ultrashape-steps",
+        str(int(ultra_steps)),
+        "--ultrashape-scale",
+        str(float(ultra_scale)),
+        "--ultrashape-num-latents",
+        str(int(ultra_latents)),
+        "--ultrashape-chunk-size",
+        str(int(ultra_chunk)),
+        "--ultrashape-octree-res",
+        str(int(ultra_octree)),
+    ]
+    if image_path:
+        cmd.extend(["--image", abs_path(image_path)])
+    cmd.append("--ultrashape-low-vram" if ultra_low_vram else "--no-ultrashape-low-vram")
+    if ultra_remove_bg:
+        cmd.append("--ultrashape-remove-bg")
+
+    env = os.environ.copy()
+    env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    env["CUDA_VISIBLE_DEVICES"] = str(gpu).strip()
+    env["PYTHONUNBUFFERED"] = "1"
+
+    log_lines = [
+        f"ROI run directory: {out_dir}",
+        "Command:",
+        " ".join(q(x) for x in cmd),
+        "",
+    ]
+    artifacts: list[str] = []
+    labels: dict[str, str] = {}
+    preview = None
+    yield "\n".join(log_lines), preview, artifacts, gr.update(choices=[], value=None)
+
+    proc = subprocess.Popen(
+        cmd,
+        cwd=ROOT,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
+    )
+
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        line = line.rstrip()
+        log_lines.append(line)
+        if line.startswith("ROI_ARTIFACT\t"):
+            parts = line.split("\t", 2)
+            if len(parts) == 3 and Path(parts[2]).exists():
+                preview = add_artifact(parts[2], parts[1], artifacts, labels)
+        yield "\n".join(log_lines[-500:]), preview, artifacts, gr.update(choices=artifact_choices(artifacts, labels), value=preview)
+
+    code = proc.wait()
+    for glb in sorted(out_dir.glob("*.glb")):
+        label = glb.stem.replace(f"{safe_label}_", "")
+        preview = add_artifact(glb, label, artifacts, labels)
+    log_lines.append("")
+    log_lines.append(f"Exit code: {code}")
+    yield "\n".join(log_lines[-500:]), preview, artifacts, gr.update(choices=artifact_choices(artifacts, labels), value=preview)
 
 
 def build_command(
@@ -996,6 +1139,50 @@ def build_ui():
                 viewer = gr.Model3D(label="Selected GLB", height=560, clear_color=(0.18, 0.19, 0.2, 1.0))
                 artifacts = gr.File(label="Artifacts", file_count="multiple")
                 log = gr.Textbox(label="Run log", lines=22, elem_id="run-log", autoscroll=True)
+                with gr.Accordion("Experimental: ROI zoom/enhance", open=False):
+                    gr.Markdown(
+                        "Consumes the currently selected GLB. Inspect mode exports a cropped ROI, context shell, and overlay. "
+                        "UltraShape mode refines only that crop, inverse-transforms it back, and emits a crude merged preview."
+                    )
+                    with gr.Row():
+                        roi_mode = gr.Dropdown(
+                            ["inspect", "ultrashape"],
+                            label="Mode",
+                            value="inspect",
+                            info="Inspect is geometry-only and fast. UltraShape runs the ROI through UltraShape and attempts a world-space patch preview.",
+                        )
+                        roi_preset = gr.Dropdown(
+                            list(ROI_PRESETS),
+                            label="ROI preset",
+                            value="Head / face",
+                            info="Normalized bounding-box presets assuming a Y-up character/object.",
+                        )
+                        roi_label = gr.Textbox(label="ROI label", value="face", info="Used in output filenames.")
+                    with gr.Row():
+                        roi_center_x = gr.Slider(0.0, 1.0, value=0.5, step=0.01, label="Center X")
+                        roi_center_y = gr.Slider(0.0, 1.0, value=0.82, step=0.01, label="Center Y")
+                        roi_center_z = gr.Slider(0.0, 1.0, value=0.5, step=0.01, label="Center Z")
+                    with gr.Row():
+                        roi_size_x = gr.Slider(0.01, 1.0, value=0.46, step=0.01, label="Size X")
+                        roi_size_y = gr.Slider(0.01, 1.0, value=0.34, step=0.01, label="Size Y")
+                        roi_size_z = gr.Slider(0.01, 1.0, value=0.46, step=0.01, label="Size Z")
+                    with gr.Row():
+                        roi_context = gr.Number(label="Context multiplier", value=1.35, info="Exports an expanded context crop around the ROI.")
+                        roi_fallback_faces = gr.Number(label="Fallback faces", value=2000, precision=0, info="Nearest faces to use if the ROI box misses the mesh.")
+                    with gr.Row():
+                        roi_ultra_steps = gr.Number(label="UltraShape steps", value=25, precision=0)
+                        roi_ultra_latents = gr.Number(label="UltraShape latents", value=8192, precision=0)
+                        roi_ultra_octree = gr.Number(label="UltraShape octree", value=512, precision=0)
+                    with gr.Row():
+                        roi_ultra_chunk = gr.Number(label="UltraShape chunk", value=2048, precision=0)
+                        roi_ultra_scale = gr.Number(label="UltraShape scale", value=0.99)
+                        roi_ultra_low_vram = gr.Checkbox(label="Low VRAM", value=True)
+                        roi_ultra_remove_bg = gr.Checkbox(label="Remove bg", value=False)
+                    roi_run = gr.Button("Run ROI Zoom/Enhance", variant="secondary")
+                    roi_picker = gr.Dropdown(label="ROI artifact", choices=[], value=None)
+                    roi_viewer = gr.Model3D(label="ROI selected GLB", height=420, clear_color=(0.18, 0.19, 0.2, 1.0))
+                    roi_files = gr.File(label="ROI artifacts", file_count="multiple")
+                    roi_log = gr.Textbox(label="ROI log", lines=12, elem_id="roi-log", autoscroll=True)
 
         preset_outputs = [
             pipeline,
@@ -1115,6 +1302,39 @@ def build_ui():
             outputs=[log, viewer, artifacts, artifact_picker],
         )
         artifact_picker.change(select_artifact, inputs=[artifact_picker], outputs=[viewer])
+        roi_preset.change(
+            apply_roi_preset,
+            inputs=[roi_preset],
+            outputs=[roi_center_x, roi_center_y, roi_center_z, roi_size_x, roi_size_y, roi_size_z],
+        )
+        roi_run.click(
+            run_roi_enhance,
+            inputs=[
+                artifact_picker,
+                image,
+                gpu,
+                roi_mode,
+                roi_label,
+                roi_center_x,
+                roi_center_y,
+                roi_center_z,
+                roi_size_x,
+                roi_size_y,
+                roi_size_z,
+                roi_context,
+                roi_fallback_faces,
+                seed,
+                roi_ultra_steps,
+                roi_ultra_latents,
+                roi_ultra_chunk,
+                roi_ultra_octree,
+                roi_ultra_scale,
+                roi_ultra_low_vram,
+                roi_ultra_remove_bg,
+            ],
+            outputs=[roi_log, roi_viewer, roi_files, roi_picker],
+        )
+        roi_picker.change(select_artifact, inputs=[roi_picker], outputs=[roi_viewer])
     return app
 
 
