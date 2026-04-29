@@ -443,6 +443,12 @@ def add_native_args(parser: argparse.ArgumentParser) -> None:
         default=True,
         help="Keep /tmp/extensions sources between native build attempts.",
     )
+    parser.add_argument(
+        "--components",
+        nargs="+",
+        default=["nvdiffrast", "nvdiffrec", "cumesh", "o-voxel", "flexgemm"],
+        choices=["basic", "nvdiffrast", "nvdiffrec", "cumesh", "o-voxel", "flexgemm"],
+    )
 
 
 def add_windows_native_args(parser: argparse.ArgumentParser) -> None:
@@ -461,12 +467,6 @@ def add_windows_native_args(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=4,
         help="Native extension build parallelism.",
-    )
-    parser.add_argument(
-        "--components",
-        nargs="+",
-        default=["nvdiffrast", "nvdiffrec", "cumesh", "o-voxel", "flexgemm"],
-        choices=["basic", "nvdiffrast", "nvdiffrec", "cumesh", "o-voxel", "flexgemm"],
     )
 
 
