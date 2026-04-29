@@ -13,9 +13,8 @@ uv sync
 
 echo
 echo "uv sync complete."
-echo "Next, install the native packages required by this checkout if they are not already built:"
-echo "  source .venv/bin/activate"
-echo "  ./setup.sh --basic --nvdiffrast --nvdiffrec --cumesh --o-voxel --flexgemm"
+echo "For a Blackwell Lightning node, install the matching torch stack, native packages, and run smoke tests:"
+echo "  uv run ed3d-bootstrap lightning-all"
 echo
 echo "Download UltraShape weights if not committed/copied:"
 echo "  python - <<'PY'"
@@ -24,4 +23,4 @@ echo "hf_hub_download('infinith/UltraShape', 'ultrashape_v1.pt', local_dir='inte
 echo "PY"
 echo
 echo "Start remote UI:"
-echo "  uv run ed3d-remote-lab --host 0.0.0.0 --port 7860"
+echo "  uv run --no-sync ed3d-remote-lab --host 0.0.0.0 --port 7860"

@@ -16,6 +16,18 @@ Remote UI:
 uv run ed3d-remote-lab --host 0.0.0.0 --port 7860
 ```
 
+Lightning Blackwell setup:
+
+```bash
+uv sync
+uv run ed3d-bootstrap lightning-all
+uv run --no-sync ed3d-remote-lab --host 0.0.0.0 --port 7860
+```
+
+Use `--no-sync` after `ed3d-bootstrap lightning-all` because that command
+intentionally replaces the local CUDA 12.4 torch stack with CUDA 13.0 wheels
+for Blackwell GPUs.
+
 CLI image-to-3D wrapper:
 
 ```bash

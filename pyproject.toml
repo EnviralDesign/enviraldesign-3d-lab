@@ -46,6 +46,8 @@ dependencies = [
 [project.scripts]
 ed3d-image-to-3d = "local_image_to_3d:main"
 ed3d-remote-lab = "tools.remote_launcher:main"
+ed3d-bootstrap = "tools.bootstrap:main"
+ed3d-smoke = "tools.bootstrap:smoke_main"
 
 [build-system]
 requires = ["setuptools>=80,<81", "wheel"]
