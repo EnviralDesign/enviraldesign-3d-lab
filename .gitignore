@@ -213,6 +213,7 @@ tmp/
 *.glb
 native_build*.log
 remote_lab.log
+.native-build/
 
 # Model weights and local caches
 *.pt

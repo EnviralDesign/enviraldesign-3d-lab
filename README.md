@@ -8,6 +8,7 @@ First-class setup path:
 
 ```bash
 uv sync
+uv run bootstrap
 ```
 
 Remote UI:
@@ -30,9 +31,11 @@ uv run bootstrap
 uv run --no-sync ed3d-remote-lab --host 0.0.0.0 --port 7860
 ```
 
-Use `--no-sync` after `uv run bootstrap` because that command
-intentionally replaces the local CUDA 12.4 torch stack with CUDA 13.0 wheels
-for Blackwell GPUs.
+On Windows, `uv run bootstrap` builds the native packages from source against
+the local CUDA 12.4 Torch stack. On Linux/Lightning, it intentionally replaces
+the local CUDA 12.4 torch stack with CUDA 13.0 wheels for Blackwell GPUs. Use
+`--no-sync` after `uv run bootstrap` on Lightning so `uv` does not restore the
+lockfile CUDA 12.4 stack.
 
 The bootstrap also prefetches ungated auxiliary model mirrors. Upstream
 TRELLIS.2 currently references Meta's gated DINOv3 repo; this launcher rewrites

@@ -23,6 +23,7 @@ DEFAULT_REMBG_ALLOW = "onnx/model_quantized.onnx"
 DEFAULT_ULTRASHAPE_MODEL = "infinith/UltraShape"
 DEFAULT_ULTRASHAPE_FILE = "ultrashape_v1.pt"
 DEFAULT_ULTRASHAPE_DIR = ROOT / "integrations" / "UltraShape-1.0" / "checkpoints"
+NATIVE_BUILD_ROOT = ROOT / ".native-build"
 
 
 def run(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
@@ -54,6 +55,103 @@ def remove_conflicting_flash_attention() -> None:
         cwd=ROOT,
         check=False,
     )
+
+
+def clone_or_update(repo: str, dest: Path, *, branch: str | None = None, recursive: bool = False) -> None:
+    if dest.exists():
+        run(["git", "-C", str(dest), "fetch", "--all", "--tags"])
+        run(["git", "-C", str(dest), "pull", "--ff-only"])
+        return
+
+    cmd = ["git", "clone"]
+    if branch:
+        cmd.extend(["-b", branch])
+    if recursive:
+        cmd.append("--recursive")
+    cmd.extend([repo, str(dest)])
+    run(cmd)
+
+
+def windows_native_env(args: argparse.Namespace) -> dict[str, str]:
+    env = os.environ.copy()
+    cuda_home = Path(args.cuda_home)
+    if cuda_home.exists():
+        env["CUDA_HOME"] = str(cuda_home)
+        env["CUDA_PATH"] = str(cuda_home)
+        env["PATH"] = str(cuda_home / "bin") + os.pathsep + env.get("PATH", "")
+    env["TORCH_CUDA_ARCH_LIST"] = args.cuda_arch
+    env["FORCE_CUDA"] = "1"
+    env["MAX_JOBS"] = str(args.max_jobs)
+    return env
+
+
+def install_path_no_isolation(path: Path, *, env: dict[str, str], no_deps: bool = False) -> None:
+    cmd = [
+        "uv",
+        "pip",
+        "install",
+        "--python",
+        str(VENV_PYTHON),
+        "--no-build-isolation",
+    ]
+    if no_deps:
+        cmd.append("--no-deps")
+    cmd.append(str(path))
+    run(
+        cmd,
+        env=env,
+    )
+
+
+def patch_flexgemm_windows_source(source_root: Path) -> None:
+    path = source_root / "flex_gemm" / "kernels" / "cuda" / "spconv" / "sparse_neighbor_map.cu"
+    text = path.read_text()
+    patched = text.replace("expanded_keys.data_ptr<T>()", "expanded_keys.template data_ptr<T>()")
+    patched = patched.replace("valid_keys.data_ptr<T>()", "valid_keys.template data_ptr<T>()")
+    if patched != text:
+        path.write_text(patched)
+
+
+def build_windows_native(args: argparse.Namespace) -> None:
+    """Build native TRELLIS dependencies from source on Windows."""
+    ensure_venv()
+    if os.name != "nt":
+        raise SystemExit("windows-native expects Windows. Use `uv run bootstrap` on Linux/Lightning.")
+
+    NATIVE_BUILD_ROOT.mkdir(exist_ok=True)
+    env = windows_native_env(args)
+
+    run(
+        [
+            "uv",
+            "pip",
+            "install",
+            "--python",
+            str(VENV_PYTHON),
+            "plyfile>=1.1.3",
+            "triton-windows==3.2.0.post21",
+            "pip",
+        ]
+    )
+
+    clone_or_update("https://github.com/NVlabs/nvdiffrast.git", NATIVE_BUILD_ROOT / "nvdiffrast", branch="v0.4.0")
+    install_path_no_isolation(NATIVE_BUILD_ROOT / "nvdiffrast", env=env)
+
+    clone_or_update("https://github.com/JeffreyXiang/nvdiffrec.git", NATIVE_BUILD_ROOT / "nvdiffrec", branch="renderutils")
+    install_path_no_isolation(NATIVE_BUILD_ROOT / "nvdiffrec", env=env)
+
+    clone_or_update("https://github.com/JeffreyXiang/CuMesh.git", NATIVE_BUILD_ROOT / "CuMesh", recursive=True)
+    install_path_no_isolation(NATIVE_BUILD_ROOT / "CuMesh", env=env)
+
+    clone_or_update("https://github.com/JeffreyXiang/FlexGEMM.git", NATIVE_BUILD_ROOT / "FlexGEMM", recursive=True)
+    patch_flexgemm_windows_source(NATIVE_BUILD_ROOT / "FlexGEMM")
+    install_path_no_isolation(NATIVE_BUILD_ROOT / "FlexGEMM", env=env)
+
+    install_path_no_isolation(ROOT / "o-voxel", env=env, no_deps=True)
+
+    prefetch_aux_models(args)
+    download_ultrashape(args)
+    smoke_imports()
 
 
 def install_blackwell_torch(args: argparse.Namespace) -> None:
@@ -259,6 +357,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_native_args(native)
     native.set_defaults(func=build_native)
 
+    windows_native = sub.add_parser("windows-native", help="Build native TRELLIS dependencies from source on Windows.")
+    add_windows_native_args(windows_native)
+    add_hf_model_args(windows_native)
+    add_ultrashape_args(windows_native)
+    windows_native.set_defaults(func=build_windows_native)
+
     flash = sub.add_parser("flash-attention", help="Install experimental dense FlashAttention package.")
     add_flash_attention_args(flash)
     flash.set_defaults(func=install_flash_attention)
@@ -309,6 +413,25 @@ def add_native_args(parser: argparse.ArgumentParser) -> None:
         dest="clean_tmp",
         default=True,
         help="Keep /tmp/extensions sources between native build attempts.",
+    )
+
+
+def add_windows_native_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--cuda-home",
+        default=r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.4",
+        help="CUDA toolkit path matching the local torch CUDA stack.",
+    )
+    parser.add_argument(
+        "--cuda-arch",
+        default="7.5;8.6",
+        help="Local RTX 5000 is sm_75; RTX 3070 is sm_86.",
+    )
+    parser.add_argument(
+        "--max-jobs",
+        type=int,
+        default=4,
+        help="Native extension build parallelism.",
     )
     parser.add_argument(
         "--components",
@@ -362,7 +485,8 @@ def main() -> None:
 
 def default_main() -> None:
     parser = build_parser()
-    args = parser.parse_args(["lightning-all", *sys.argv[1:]])
+    command = "windows-native" if os.name == "nt" else "lightning-all"
+    args = parser.parse_args([command, *sys.argv[1:]])
     args.func(args)
 
 
