@@ -66,6 +66,11 @@ def build_native(args: argparse.Namespace) -> None:
     ensure_venv()
     if platform.system() != "Linux":
         raise SystemExit("Native bootstrap currently expects Linux.")
+    # uv-created venvs do not necessarily contain a `pip` executable. The
+    # upstream setup.sh calls `pip` directly, so install it into this venv
+    # before activating; otherwise Linux images with a base Conda install can
+    # accidentally build extensions against the wrong Python/CUDA stack.
+    run(["uv", "pip", "install", "--python", str(VENV_PYTHON), "pip"])
 
     components = args.components
     setup_flags = [f"--{component}" for component in components]
