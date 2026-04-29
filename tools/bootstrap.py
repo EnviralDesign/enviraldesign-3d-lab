@@ -57,6 +57,31 @@ def remove_conflicting_flash_attention() -> None:
     )
 
 
+def uninstall_native_extensions() -> None:
+    """Remove native extensions before rebuilding against the active Torch ABI."""
+    ensure_venv()
+    packages = [
+        "cumesh",
+        "o-voxel",
+        "flex-gemm",
+        "nvdiffrast",
+        "nvdiffrec-render",
+    ]
+    print("+ uv pip uninstall --python", VENV_PYTHON, " ".join(packages), flush=True)
+    subprocess.run(
+        [
+            "uv",
+            "pip",
+            "uninstall",
+            "--python",
+            str(VENV_PYTHON),
+            *packages,
+        ],
+        cwd=ROOT,
+        check=False,
+    )
+
+
 def clone_or_update(repo: str, dest: Path, *, branch: str | None = None, recursive: bool = False) -> None:
     if dest.exists():
         run(["git", "-C", str(dest), "fetch", "--all", "--tags"])
@@ -93,6 +118,7 @@ def install_path_no_isolation(path: Path, *, env: dict[str, str], no_deps: bool 
         "--python",
         str(VENV_PYTHON),
         "--no-build-isolation",
+        "--force-reinstall",
     ]
     if no_deps:
         cmd.append("--no-deps")
@@ -120,6 +146,7 @@ def build_windows_native(args: argparse.Namespace) -> None:
 
     NATIVE_BUILD_ROOT.mkdir(exist_ok=True)
     env = windows_native_env(args)
+    uninstall_native_extensions()
 
     run(
         [
@@ -217,6 +244,7 @@ def build_native(args: argparse.Namespace) -> None:
     # before activating; otherwise Linux images with a base Conda install can
     # accidentally build extensions against the wrong Python/CUDA stack.
     run(["uv", "pip", "install", "--python", str(VENV_PYTHON), "pip"])
+    uninstall_native_extensions()
 
     components = args.components
     setup_flags = [f"--{component}" for component in components]
@@ -226,6 +254,7 @@ def build_native(args: argparse.Namespace) -> None:
             "TORCH_CUDA_ARCH_LIST": args.cuda_arch,
             "FORCE_CUDA": "1",
             "MAX_JOBS": str(args.max_jobs),
+            "PIP_NO_CACHE_DIR": "1",
         }
     )
 
@@ -235,7 +264,7 @@ def build_native(args: argparse.Namespace) -> None:
 
     shell = (
         "source .venv/bin/activate && "
-        f"bash setup.sh {' '.join(setup_flags)}"
+        f"PIP_NO_CACHE_DIR=1 bash setup.sh {' '.join(setup_flags)}"
     )
     run(["bash", "-lc", shell], env=env)
 
