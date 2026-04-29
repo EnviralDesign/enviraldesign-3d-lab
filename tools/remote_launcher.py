@@ -930,10 +930,10 @@ def build_ui():
                     with gr.Row():
                         save_stages = gr.Checkbox(label="Save stage artifacts", value=True, info="Exports Stage 1/2/3 GLBs as they complete.")
                         stop_after = gr.Dropdown(
-                            ["none", "stage1", "stage2", "stage3"],
+                            ["none", "stage1", "stage2", "ultrashape", "stage3"],
                             label="Stop after",
                             value="none",
-                            info="Stops after a selected stage to avoid spending time on later stages.",
+                            info="Stops after a selected stage to avoid spending time on later stages. UltraShape requires UltraShape mode before-texture.",
                         )
 
                 with gr.Accordion("Optional stage: FaithC", open=False):

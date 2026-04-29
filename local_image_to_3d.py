@@ -77,7 +77,7 @@ def parse_args():
     parser.add_argument("--save-stage1", action="store_true", help="Save sparse structure occupancy as a diagnostic GLB.")
     parser.add_argument("--save-stage2", action="store_true", help="Save shape-only decoded geometry as a diagnostic GLB.")
     parser.add_argument("--save-stage3", action="store_true", help="Save decoded textured-stage geometry before GLB remesh/export as a diagnostic GLB.")
-    parser.add_argument("--stop-after", choices=["none", "stage1", "stage2", "stage3"], default="none")
+    parser.add_argument("--stop-after", choices=["none", "stage1", "stage2", "ultrashape", "stage3"], default="none")
     parser.add_argument("--stage1-max-voxels", type=int, default=12000, help="Cap sparse voxels exported as boxes for stage-1 GLB diagnostics.")
     parser.add_argument("--faithc-mode", default="off", choices=["off", "after-stage2", "after-stage3", "after-final"], help="Run FaithC contour reconstruction on a selected TRELLIS mesh artifact.")
     parser.add_argument("--faithc-resolution", type=int, default=256)
@@ -126,7 +126,10 @@ def parse_args():
     )
     parser.add_argument("--white-threshold", type=int, default=245, help="Threshold for --background local-white.")
     parser.add_argument("--no-export", action="store_true", help="Run generation but skip GLB extraction.")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.stop_after == "ultrashape" and args.ultrashape_mode != "before-texture":
+        parser.error("--stop-after ultrashape requires --ultrashape-mode before-texture")
+    return args
 
 
 def artifact_path(out_path: str, label: str) -> str:
@@ -493,6 +496,8 @@ def run_pipeline_staged(pipeline, image: Image.Image, args, ss_sampler_params, s
         torch.cuda.empty_cache()
         ultra_path = run_ultrashape_module(args, args.image, ultra_input_path, "ultrashape_before_texture")
         stage_paths["ultrashape_before_texture"] = ultra_path
+        if args.stop_after == "ultrashape":
+            return None, stage_paths
         torch.cuda.empty_cache()
         textured_mesh = texture_trimesh_with_trellis(args, image, ultra_path, tex_sampler_params, res)
         return [textured_mesh], stage_paths
