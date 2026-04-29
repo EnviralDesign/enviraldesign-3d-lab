@@ -1,10 +1,23 @@
 from typing import *
+import os
 import torch
 import torch.nn.functional as F
 from torchvision import transforms
 from transformers import DINOv3ViTModel
 import numpy as np
 from PIL import Image
+
+
+DINOV3_MODEL_MIRRORS = {
+    "facebook/dinov3-vitl16-pretrain-lvd1689m": "camenduru/dinov3-vitl16-pretrain-lvd1689m",
+}
+
+
+def resolve_dinov3_model_name(model_name: str) -> str:
+    override = os.environ.get("TRELLIS_DINOV3_MODEL")
+    if override:
+        return override
+    return DINOV3_MODEL_MIRRORS.get(model_name, model_name)
 
 
 class DinoV2FeatureExtractor:
@@ -61,8 +74,8 @@ class DinoV3FeatureExtractor:
     Feature extractor for DINOv3 models.
     """
     def __init__(self, model_name: str, image_size=512):
-        self.model_name = model_name
-        self.model = DINOv3ViTModel.from_pretrained(model_name)
+        self.model_name = resolve_dinov3_model_name(model_name)
+        self.model = DINOv3ViTModel.from_pretrained(self.model_name)
         self.model.eval()
         self.image_size = image_size
         self.transform = transforms.Compose([

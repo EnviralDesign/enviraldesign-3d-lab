@@ -68,6 +68,11 @@ It does the following:
 - installs `xformers==0.0.35`
 - builds `nvdiffrast`, `nvdiffrec_render`, `cumesh`, `o_voxel`, and `flex_gemm`
   with `TORCH_CUDA_ARCH_LIST=12.0`
+- downloads ungated auxiliary mirrors for DINOv3 and RMBG. The upstream
+  TRELLIS.2 config references gated `facebook/dinov3-vitl16-pretrain-lvd1689m`;
+  this repo redirects that at runtime to
+  `camenduru/dinov3-vitl16-pretrain-lvd1689m` unless `TRELLIS_DINOV3_MODEL` is
+  set.
 - runs torch CUDA and import smoke tests
 
 Individual steps are available if you need to resume after an interruptible
@@ -76,6 +81,7 @@ instance preemption:
 ```bash
 uv run ed3d-bootstrap blackwell-torch
 uv run --no-sync ed3d-bootstrap native
+uv run --no-sync ed3d-bootstrap hf-models
 uv run --no-sync ed3d-bootstrap smoke
 ```
 

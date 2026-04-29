@@ -17,6 +17,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VENV_PYTHON = ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+DEFAULT_DINOV3_MODEL = "camenduru/dinov3-vitl16-pretrain-lvd1689m"
+DEFAULT_REMBG_MODEL = "camenduru/RMBG-2.0"
+DEFAULT_REMBG_ALLOW = "onnx/model_quantized.onnx"
 
 
 def run(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
@@ -135,6 +138,32 @@ if failed:
     run([str(VENV_PYTHON), "-c", code])
 
 
+def prefetch_aux_models(args: argparse.Namespace) -> None:
+    """Download ungated auxiliary model files used by image generation."""
+    ensure_venv()
+    code = """
+from huggingface_hub import hf_hub_download, snapshot_download
+
+dinov3_model = {dinov3_model!r}
+rembg_model = {rembg_model!r}
+rembg_allow = {rembg_allow!r}
+
+print(f"Downloading DINOv3 mirror: {{dinov3_model}}", flush=True)
+snapshot_download(
+    dinov3_model,
+    allow_patterns=["config.json", "model.safetensors", "preprocessor_config.json"],
+)
+
+print(f"Downloading RMBG mirror: {{rembg_model}} ({rembg_allow})", flush=True)
+hf_hub_download(rembg_model, rembg_allow)
+""".format(
+        dinov3_model=args.dinov3_model,
+        rembg_model=args.rembg_model,
+        rembg_allow=args.rembg_allow,
+    )
+    run([str(VENV_PYTHON), "-c", code])
+
+
 def smoke(args: argparse.Namespace | None = None) -> None:
     smoke_torch()
     smoke_imports()
@@ -143,6 +172,7 @@ def smoke(args: argparse.Namespace | None = None) -> None:
 def all_lightning(args: argparse.Namespace) -> None:
     install_blackwell_torch(args)
     build_native(args)
+    prefetch_aux_models(args)
     smoke(args)
 
 
@@ -161,9 +191,14 @@ def build_parser() -> argparse.ArgumentParser:
     smoke_parser = sub.add_parser("smoke", help="Run torch and import smoke tests.")
     smoke_parser.set_defaults(func=smoke)
 
+    hf_parser = sub.add_parser("hf-models", help="Download ungated auxiliary model mirrors.")
+    add_hf_model_args(hf_parser)
+    hf_parser.set_defaults(func=prefetch_aux_models)
+
     all_parser = sub.add_parser("lightning-all", help="Blackwell torch + native build + smoke.")
     add_blackwell_args(all_parser)
     add_native_args(all_parser)
+    add_hf_model_args(all_parser)
     all_parser.set_defaults(func=all_lightning)
 
     return parser
@@ -192,6 +227,24 @@ def add_native_args(parser: argparse.ArgumentParser) -> None:
         nargs="+",
         default=["nvdiffrast", "nvdiffrec", "cumesh", "o-voxel", "flexgemm"],
         choices=["basic", "nvdiffrast", "nvdiffrec", "cumesh", "o-voxel", "flexgemm"],
+    )
+
+
+def add_hf_model_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--dinov3-model",
+        default=os.environ.get("TRELLIS_DINOV3_MODEL", DEFAULT_DINOV3_MODEL),
+        help="Ungated DINOv3 Hugging Face repo used instead of facebook/dinov3-vitl16-pretrain-lvd1689m.",
+    )
+    parser.add_argument(
+        "--rembg-model",
+        default=DEFAULT_REMBG_MODEL,
+        help="Ungated RMBG Hugging Face repo to prefetch for background removal.",
+    )
+    parser.add_argument(
+        "--rembg-allow",
+        default=DEFAULT_REMBG_ALLOW,
+        help="RMBG file to prefetch from --rembg-model.",
     )
 
 

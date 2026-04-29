@@ -28,6 +28,13 @@ Use `--no-sync` after `ed3d-bootstrap lightning-all` because that command
 intentionally replaces the local CUDA 12.4 torch stack with CUDA 13.0 wheels
 for Blackwell GPUs.
 
+The bootstrap also prefetches ungated auxiliary model mirrors. Upstream
+TRELLIS.2 currently references Meta's gated DINOv3 repo; this launcher rewrites
+that dependency to `camenduru/dinov3-vitl16-pretrain-lvd1689m` by default.
+Override it with `TRELLIS_DINOV3_MODEL` or
+`uv run ed3d-bootstrap hf-models --dinov3-model <repo>` if a better mirror is
+needed later.
+
 CLI image-to-3D wrapper:
 
 ```bash
