@@ -1,0 +1,93 @@
+[project]
+name = "enviraldesign-3d-lab"
+version = "0.1.0"
+description = "Remote-friendly TRELLIS.2 and UltraShape image-to-3D lab."
+readme = "README.md"
+requires-python = ">=3.10,<3.11"
+dependencies = [
+    "accelerate>=1.13.0",
+    "diffusers==0.30.0",
+    "easydict>=1.13",
+    "einops>=0.8.1",
+    "gradio>=5.0",
+    "huggingface-hub>=0.30.0",
+    "imageio>=2.37.0",
+    "imageio-ffmpeg>=0.6.0",
+    "jaxtyping>=0.3.4",
+    "lpips>=0.1.4",
+    "ninja>=1.13.0",
+    "numpy<2",
+    "omegaconf==2.3.0",
+    "onnxruntime-gpu>=1.23.0",
+    "opencv-python-headless>=4.10,<4.12",
+    "pandas>=2.3.0",
+    "pillow>=11.0.0",
+    "pymeshlab==2022.2.post3",
+    "pytorch-lightning==1.9.5",
+    "rembg>=2.0.67",
+    "safetensors>=0.7.0",
+    "scikit-image==0.24.0",
+    "scipy>=1.15.0",
+    "setuptools<81",
+    "tensorboard>=2.20.0",
+    "timm==1.0.22",
+    "torch==2.6.0",
+    "torchaudio==2.6.0",
+    "torchdiffeq==0.2.5",
+    "torchvision==0.21.0",
+    "tqdm>=4.67.0",
+    "transformers>=4.53.0",
+    "trimesh>=4.9.0",
+    "typeguard==4.3.0",
+    "xformers==0.0.29.post3",
+    "zstandard>=0.25.0",
+]
+
+[project.scripts]
+ed3d-image-to-3d = "local_image_to_3d:main"
+ed3d-remote-lab = "tools.remote_launcher:main"
+
+[build-system]
+requires = ["setuptools>=80,<81", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["local_image_to_3d"]
+packages = [
+    "tools",
+    "trellis2",
+    "trellis2.datasets",
+    "trellis2.models",
+    "trellis2.models.sc_vaes",
+    "trellis2.modules",
+    "trellis2.modules.attention",
+    "trellis2.modules.sparse",
+    "trellis2.modules.sparse.attention",
+    "trellis2.modules.sparse.conv",
+    "trellis2.modules.sparse.spatial",
+    "trellis2.modules.sparse.transformer",
+    "trellis2.modules.transformer",
+    "trellis2.pipelines",
+    "trellis2.pipelines.rembg",
+    "trellis2.pipelines.samplers",
+    "trellis2.renderers",
+    "trellis2.representations",
+    "trellis2.representations.mesh",
+    "trellis2.representations.voxel",
+    "trellis2.trainers",
+    "trellis2.trainers.flow_matching",
+    "trellis2.trainers.flow_matching.mixins",
+    "trellis2.trainers.vae",
+    "trellis2.utils",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
+torchvision = { index = "pytorch-cu124" }
+torchaudio = { index = "pytorch-cu124" }
+xformers = { index = "pytorch-cu124" }
