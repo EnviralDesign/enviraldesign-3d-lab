@@ -1,4 +1,5 @@
 import argparse
+import importlib
 import os
 import shlex
 import subprocess
@@ -11,6 +12,26 @@ import gradio as gr
 
 ROOT = Path(__file__).resolve().parents[1]
 RUN_ROOT = ROOT / "tmp" / "remote-runs"
+
+
+def choose_dense_attention_backend() -> str:
+    requested = os.environ.get("ATTN_BACKEND")
+    if requested:
+        return requested
+
+    for backend, module in (
+        ("flash_attn_4", "flash_attn.cute"),
+        ("flash_attn_3", "flash_attn_interface"),
+        ("flash_attn", "flash_attn"),
+        ("xformers", "xformers.ops"),
+    ):
+        try:
+            importlib.import_module(module)
+            return backend
+        except Exception:
+            continue
+
+    return "sdpa"
 
 
 PRESETS = {
@@ -282,7 +303,7 @@ def run_generation(
     env = os.environ.copy()
     env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     env["CUDA_VISIBLE_DEVICES"] = str(gpu).strip()
-    env["ATTN_BACKEND"] = env.get("ATTN_BACKEND", "sdpa")
+    env["ATTN_BACKEND"] = choose_dense_attention_backend()
     env["SPARSE_ATTN_BACKEND"] = env.get("SPARSE_ATTN_BACKEND", "xformers")
     env["PYTORCH_CUDA_ALLOC_CONF"] = env.get("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     env["PYTHONUNBUFFERED"] = "1"

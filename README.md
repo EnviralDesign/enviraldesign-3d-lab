@@ -41,6 +41,11 @@ Override it with `TRELLIS_DINOV3_MODEL` or
 `uv run ed3d-bootstrap hf-models --dinov3-model <repo>` if a better mirror is
 needed later.
 
+On Blackwell, the bootstrap installs `flash-attn-4[cu13]`. The remote launcher
+auto-selects dense attention in this order: FlashAttention-4, FlashAttention-3,
+FlashAttention-2, xFormers, then PyTorch SDPA. Sparse attention currently stays
+on xFormers.
+
 CLI image-to-3D wrapper:
 
 ```bash

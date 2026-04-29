@@ -66,6 +66,7 @@ It does the following:
 - installs `torch==2.11.0+cu130`, `torchvision==0.26.0+cu130`, and
   `torchaudio==2.11.0+cu130`
 - installs `xformers==0.0.35`
+- installs `flash-attn-4[cu13]` for dense attention on Blackwell
 - builds `nvdiffrast`, `nvdiffrec_render`, `cumesh`, `o_voxel`, and `flex_gemm`
   with `TORCH_CUDA_ARCH_LIST=12.0`
 - downloads ungated auxiliary mirrors for DINOv3 and RMBG. The upstream
@@ -80,6 +81,7 @@ instance preemption:
 
 ```bash
 uv run ed3d-bootstrap blackwell-torch
+uv run --no-sync ed3d-bootstrap flash-attention
 uv run --no-sync ed3d-bootstrap native
 uv run --no-sync ed3d-bootstrap hf-models
 uv run --no-sync ed3d-bootstrap smoke
