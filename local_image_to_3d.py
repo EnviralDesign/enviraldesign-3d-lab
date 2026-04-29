@@ -16,6 +16,7 @@ import torch
 import trimesh
 
 from trellis2.pipelines import Trellis2ImageTo3DPipeline
+from trellis2.pipelines import Trellis2TexturingPipeline
 from trellis2.pipelines import rembg
 import o_voxel
 
@@ -85,7 +86,7 @@ def parse_args():
     parser.add_argument("--faithc-normalize", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--faithc-clamp-anchors", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--faithc-compute-flux", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--ultrashape-mode", default="off", choices=["off", "after-stage2", "after-stage3", "after-final"], help="Run UltraShape refinement on a selected TRELLIS mesh artifact.")
+    parser.add_argument("--ultrashape-mode", default="off", choices=["off", "before-texture", "after-stage2", "after-stage3", "after-final"], help="Run UltraShape refinement on a selected TRELLIS mesh artifact.")
     parser.add_argument("--ultrashape-config", default="integrations/UltraShape-1.0/configs/infer_dit_refine.yaml")
     parser.add_argument("--ultrashape-ckpt", default="integrations/UltraShape-1.0/checkpoints/ultrashape_v1.pt")
     parser.add_argument("--ultrashape-steps", type=int, default=12)
@@ -95,6 +96,7 @@ def parse_args():
     parser.add_argument("--ultrashape-octree-res", type=int, default=512)
     parser.add_argument("--ultrashape-low-vram", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--ultrashape-remove-bg", action="store_true")
+    parser.add_argument("--ultrashape-input-simplify-target", type=int, default=1000000, help="Simplify Stage 2 mesh before --ultrashape-mode before-texture. 0 disables.")
     parser.add_argument(
         "--inference-dtype",
         default="auto",
@@ -231,6 +233,39 @@ def run_ultrashape_module(args, image_path: str, input_mesh: str, label: str) ->
     return out_path
 
 
+def load_trimesh(path: str) -> trimesh.Trimesh:
+    mesh = trimesh.load(path, force="mesh")
+    if isinstance(mesh, trimesh.Scene):
+        parts = [geom for geom in mesh.geometry.values() if isinstance(geom, trimesh.Trimesh)]
+        if not parts:
+            raise RuntimeError(f"No mesh geometry found in {path}")
+        mesh = trimesh.util.concatenate(parts)
+    if not isinstance(mesh, trimesh.Trimesh):
+        raise RuntimeError(f"Expected a trimesh mesh from {path}, got {type(mesh).__name__}")
+    return mesh
+
+
+def texture_trimesh_with_trellis(args, image: Image.Image, mesh_path: str, sampler_params: dict, resolution: int) -> trimesh.Trimesh:
+    print("Loading TRELLIS texturing pipeline for UltraShape-refined mesh.", flush=True)
+    texturing_pipeline = Trellis2TexturingPipeline.from_pretrained(args.model)
+    apply_inference_dtype(texturing_pipeline, resolve_inference_dtype(args.inference_dtype))
+    texturing_pipeline.cuda()
+    mesh = load_trimesh(mesh_path)
+    texture_resolution = 512 if resolution == 512 else 1024
+    textured = texturing_pipeline.run(
+        mesh,
+        image,
+        seed=args.seed,
+        tex_slat_sampler_params=sampler_params,
+        preprocess_image=False,
+        resolution=texture_resolution,
+        texture_size=args.texture_size,
+    )
+    del texturing_pipeline
+    torch.cuda.empty_cache()
+    return textured
+
+
 def run_optional_modules(args, image_path: str, stage_paths: dict[str, str], final_path: str | None) -> None:
     targets = {
         "after-stage2": stage_paths.get("stage2"),
@@ -242,7 +277,7 @@ def run_optional_modules(args, image_path: str, stage_paths: dict[str, str], fin
         if not input_mesh or not os.path.exists(input_mesh):
             raise FileNotFoundError(f"FaithC requested {args.faithc_mode}, but its input mesh was not produced.")
         run_faithc_module(args, input_mesh, f"faithc_{args.faithc_mode.replace('-', '_')}")
-    if args.ultrashape_mode != "off":
+    if args.ultrashape_mode not in ("off", "before-texture"):
         input_mesh = targets.get(args.ultrashape_mode)
         if not input_mesh or not os.path.exists(input_mesh):
             raise FileNotFoundError(f"UltraShape requested {args.ultrashape_mode}, but its input mesh was not produced.")
@@ -423,8 +458,10 @@ def run_pipeline_staged(pipeline, image: Image.Image, args, ss_sampler_params, s
         tex_cond = cond_1024
         tex_model = pipeline.models['tex_slat_flow_model_1024']
 
-    if needs_stage_artifact(args, "stage2"):
+    shape_meshes = None
+    if needs_stage_artifact(args, "stage2") or args.ultrashape_mode == "before-texture":
         shape_meshes, _ = pipeline.decode_shape_slat(shape_slat, res)
+    if needs_stage_artifact(args, "stage2"):
         path = artifact_path(args.out, "stage2_shape")
         export_basic_mesh(shape_meshes[0], path, color=(220, 220, 220, 255))
         stage_paths["stage2"] = path
@@ -432,6 +469,25 @@ def run_pipeline_staged(pipeline, image: Image.Image, args, ss_sampler_params, s
         torch.cuda.empty_cache()
     if args.stop_after == "stage2":
         return None, stage_paths
+
+    if args.ultrashape_mode == "before-texture":
+        assert shape_meshes is not None
+        ultra_input_mesh = shape_meshes[0]
+        if args.ultrashape_input_simplify_target > 0:
+            print(f"Simplifying Stage 2 mesh for UltraShape input: target={args.ultrashape_input_simplify_target}", flush=True)
+            ultra_input_mesh.simplify(args.ultrashape_input_simplify_target)
+        ultra_input_path = artifact_path(args.out, "stage2_ultrashape_input")
+        export_basic_mesh(ultra_input_mesh, ultra_input_path, color=(225, 225, 225, 255))
+        stage_paths["stage2_ultrashape_input"] = ultra_input_path
+        print_artifact("stage2_ultrashape_input", ultra_input_path)
+
+        pipeline.cpu()
+        torch.cuda.empty_cache()
+        ultra_path = run_ultrashape_module(args, args.image, ultra_input_path, "ultrashape_before_texture")
+        stage_paths["ultrashape_before_texture"] = ultra_path
+        torch.cuda.empty_cache()
+        textured_mesh = texture_trimesh_with_trellis(args, image, ultra_path, tex_sampler_params, res)
+        return [textured_mesh], stage_paths
 
     tex_slat = pipeline.sample_tex_slat(tex_cond, tex_model, shape_slat, tex_sampler_params)
     torch.cuda.empty_cache()
@@ -519,6 +575,24 @@ def main():
         return
 
     mesh = meshes[0]
+    if isinstance(mesh, trimesh.Trimesh):
+        print(f"Generated textured trimesh: vertices={len(mesh.vertices)}, faces={len(mesh.faces)}")
+        if args.no_export:
+            del pipeline
+            del meshes
+            del mesh
+            torch.cuda.empty_cache()
+            run_optional_modules(args, image_path, stage_paths, None)
+            return
+        mesh.export(args.out)
+        print(f"Wrote {args.out}")
+        del pipeline
+        del meshes
+        del mesh
+        torch.cuda.empty_cache()
+        run_optional_modules(args, image_path, stage_paths, args.out)
+        return
+
     print(f"Generated mesh: vertices={len(mesh.vertices)}, faces={len(mesh.faces)}")
     if args.no_export:
         del pipeline

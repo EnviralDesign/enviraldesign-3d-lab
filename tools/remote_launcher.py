@@ -81,6 +81,7 @@ PRESETS = {
         "ultra_chunk": 2048,
         "ultra_octree": 512,
         "ultra_scale": 0.99,
+        "ultra_input_simplify": 1000000,
         "ultra_low_vram": True,
         "ultra_remove_bg": False,
     },
@@ -131,6 +132,7 @@ PRESETS = {
         "ultra_chunk": 2048,
         "ultra_octree": 512,
         "ultra_scale": 0.99,
+        "ultra_input_simplify": 1000000,
         "ultra_low_vram": True,
         "ultra_remove_bg": False,
     },
@@ -181,6 +183,58 @@ PRESETS = {
         "ultra_chunk": 2048,
         "ultra_octree": 512,
         "ultra_scale": 0.99,
+        "ultra_input_simplify": 1000000,
+        "ultra_low_vram": True,
+        "ultra_remove_bg": False,
+    },
+    "Comfy-style UltraShape before texture": {
+        "pipeline": "1024_cascade",
+        "seed": 0,
+        "max_tokens": 12288,
+        "sparse_res": 32,
+        "stage1_max_voxels": 12000,
+        "decimation": 200000,
+        "texture_size": 1024,
+        "ss_steps": 30,
+        "shape_steps": 30,
+        "tex_steps": 12,
+        "ss_guidance": 6.6,
+        "shape_guidance": 8.2,
+        "tex_guidance": 1.0,
+        "ss_rescale": 0.1,
+        "shape_rescale": 0.1,
+        "tex_rescale": 0.0,
+        "ss_rescale_t": 1.0,
+        "shape_rescale_t": 2.0,
+        "tex_rescale_t": 3.0,
+        "ss_interval_start": 0.1,
+        "ss_interval_end": 1.0,
+        "shape_interval_start": 0.1,
+        "shape_interval_end": 1.0,
+        "tex_interval_start": 0.6,
+        "tex_interval_end": 0.9,
+        "export_remesh": True,
+        "fill_holes": True,
+        "max_hole_perimeter": 0.03,
+        "remesh_band": 1.0,
+        "remesh_project": 0.9,
+        "pre_simplify": 16777216,
+        "save_stages": True,
+        "stop_after": "none",
+        "faithc_mode": "off",
+        "faithc_resolution": 256,
+        "faithc_tri_mode": "auto",
+        "faithc_margin": 0.05,
+        "faithc_normalize": False,
+        "faithc_clamp": True,
+        "faithc_flux": True,
+        "ultra_mode": "before-texture",
+        "ultra_steps": 10,
+        "ultra_latents": 8192,
+        "ultra_chunk": 2048,
+        "ultra_octree": 256,
+        "ultra_scale": 0.99,
+        "ultra_input_simplify": 1000000,
         "ultra_low_vram": True,
         "ultra_remove_bg": False,
     },
@@ -231,6 +285,7 @@ PRESETS = {
         "ultra_chunk": 2048,
         "ultra_octree": 512,
         "ultra_scale": 0.99,
+        "ultra_input_simplify": 1000000,
         "ultra_low_vram": True,
         "ultra_remove_bg": False,
     },
@@ -281,6 +336,7 @@ PRESETS = {
         "ultra_chunk": 2048,
         "ultra_octree": 512,
         "ultra_scale": 0.99,
+        "ultra_input_simplify": 1000000,
         "ultra_low_vram": True,
         "ultra_remove_bg": False,
     },
@@ -342,6 +398,7 @@ PRESET_OUTPUT_KEYS = [
     "ultra_chunk",
     "ultra_octree",
     "ultra_scale",
+    "ultra_input_simplify",
     "ultra_low_vram",
     "ultra_remove_bg",
 ]
@@ -424,6 +481,7 @@ def build_command(
     ultra_chunk,
     ultra_octree,
     ultra_scale,
+    ultra_input_simplify,
     ultra_low_vram,
     ultra_remove_bg,
 ):
@@ -520,6 +578,8 @@ def build_command(
         str(int(ultra_chunk)),
         "--ultrashape-octree-res",
         str(int(ultra_octree)),
+        "--ultrashape-input-simplify-target",
+        str(int(ultra_input_simplify)),
     ]
     if export_remesh:
         cmd.append("--export-remesh")
@@ -596,6 +656,7 @@ def run_generation(
     ultra_chunk,
     ultra_octree,
     ultra_scale,
+    ultra_input_simplify,
     ultra_low_vram,
     ultra_remove_bg,
 ):
@@ -663,6 +724,7 @@ def run_generation(
         ultra_chunk,
         ultra_octree,
         ultra_scale,
+        ultra_input_simplify,
         ultra_low_vram,
         ultra_remove_bg,
     )
@@ -863,10 +925,10 @@ def build_ui():
 
                 with gr.Accordion("Optional stage: UltraShape", open=True):
                     ultra_mode = gr.Dropdown(
-                        ["off", "after-stage2", "after-stage3", "after-final"],
+                        ["off", "before-texture", "after-stage2", "after-stage3", "after-final"],
                         label="Run UltraShape",
                         value="after-final",
-                        info="Refines a selected TRELLIS mesh artifact with UltraShape.",
+                        info="before-texture matches the Comfy workflow: Stage 2 mesh -> UltraShape -> TRELLIS texturing.",
                     )
                     with gr.Row():
                         ultra_steps = gr.Number(label="Steps", value=25, precision=0, info="UltraShape diffusion/refinement steps.")
@@ -875,6 +937,7 @@ def build_ui():
                     with gr.Row():
                         ultra_chunk = gr.Number(label="Chunk size", value=2048, precision=0, info="Inference chunk size. Lower reduces VRAM and slows refinement.")
                         ultra_octree = gr.Number(label="Octree res", value=512, precision=0, info="UltraShape mesh extraction resolution.")
+                        ultra_input_simplify = gr.Number(label="Input simplify target", value=1000000, precision=0, info="Simplifies Stage 2 before before-texture UltraShape. 0 disables.")
                     with gr.Row():
                         ultra_low_vram = gr.Checkbox(label="Low VRAM", value=True, info="Uses UltraShape low-VRAM/offload mode when available.")
                         ultra_remove_bg = gr.Checkbox(label="Remove background", value=False, info="Runs UltraShape background removal. Usually leave off if TRELLIS input is already prepared.")
@@ -934,6 +997,7 @@ def build_ui():
             ultra_chunk,
             ultra_octree,
             ultra_scale,
+            ultra_input_simplify,
             ultra_low_vram,
             ultra_remove_bg,
         ]
@@ -997,6 +1061,7 @@ def build_ui():
                 ultra_chunk,
                 ultra_octree,
                 ultra_scale,
+                ultra_input_simplify,
                 ultra_low_vram,
                 ultra_remove_bg,
             ],
