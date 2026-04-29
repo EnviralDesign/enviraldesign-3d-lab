@@ -20,6 +20,7 @@ VENV_PYTHON = ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bi
 DEFAULT_DINOV3_MODEL = "camenduru/dinov3-vitl16-pretrain-lvd1689m"
 DEFAULT_REMBG_MODEL = "camenduru/RMBG-2.0"
 DEFAULT_REMBG_ALLOW = "onnx/model_quantized.onnx"
+DEFAULT_TRELLIS_MODEL = "microsoft/TRELLIS.2-4B"
 DEFAULT_ULTRASHAPE_MODEL = "infinith/UltraShape"
 DEFAULT_ULTRASHAPE_FILE = "ultrashape_v1.pt"
 DEFAULT_ULTRASHAPE_DIR = ROOT / "integrations" / "UltraShape-1.0" / "checkpoints"
@@ -376,6 +377,7 @@ from huggingface_hub import hf_hub_download, snapshot_download
 dinov3_model = {dinov3_model!r}
 rembg_model = {rembg_model!r}
 rembg_allow = {rembg_allow!r}
+trellis_model = {trellis_model!r}
 
 print(f"Downloading DINOv3 mirror: {{dinov3_model}}", flush=True)
 snapshot_download(
@@ -385,10 +387,18 @@ snapshot_download(
 
 print(f"Downloading RMBG mirror: {{rembg_model}} ({rembg_allow})", flush=True)
 hf_hub_download(rembg_model, rembg_allow)
+
+print(f"Downloading TRELLIS texturing encoder: {{trellis_model}}", flush=True)
+for filename in [
+    "ckpts/shape_enc_next_dc_f16c32_fp16.json",
+    "ckpts/shape_enc_next_dc_f16c32_fp16.safetensors",
+]:
+    hf_hub_download(trellis_model, filename)
 """.format(
         dinov3_model=args.dinov3_model,
         rembg_model=args.rembg_model,
         rembg_allow=args.rembg_allow,
+        trellis_model=args.trellis_model,
     )
     run([str(VENV_PYTHON), "-c", code])
 
@@ -528,6 +538,11 @@ def add_windows_native_args(parser: argparse.ArgumentParser) -> None:
 
 
 def add_hf_model_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--trellis-model",
+        default=os.environ.get("TRELLIS_MODEL", DEFAULT_TRELLIS_MODEL),
+        help="TRELLIS Hugging Face repo used for required non-pipeline-listed checkpoints.",
+    )
     parser.add_argument(
         "--dinov3-model",
         default=os.environ.get("TRELLIS_DINOV3_MODEL", DEFAULT_DINOV3_MODEL),

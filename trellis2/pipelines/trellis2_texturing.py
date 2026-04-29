@@ -6,6 +6,7 @@ from PIL import Image
 import trimesh
 from .base import Pipeline
 from . import samplers, rembg
+from .. import models
 from ..modules.sparse import SparseTensor
 from ..modules import image_feature_extractor
 import o_voxel
@@ -84,6 +85,8 @@ class Trellis2TexturingPipeline(Pipeline):
 
         pipeline.image_cond_model = getattr(image_feature_extractor, args['image_cond_model']['name'])(**args['image_cond_model']['args'])
         pipeline.rembg_model = getattr(rembg, args['rembg_model']['name'])(**args['rembg_model']['args'])
+        pipeline.pretrained_path = path
+        pipeline._ensure_shape_slat_encoder()
 
         pipeline.low_vram = args.get('low_vram', True)
         pipeline.pbr_attr_layout = {
@@ -94,6 +97,15 @@ class Trellis2TexturingPipeline(Pipeline):
         }
         pipeline._device = 'cpu'
         return pipeline
+
+    def _ensure_shape_slat_encoder(self) -> None:
+        if self.models.get('shape_slat_encoder') is not None:
+            return
+        print("Loading Shape SLat encoder for mesh texturing.", flush=True)
+        self.models['shape_slat_encoder'] = models.from_pretrained(
+            f"{self.pretrained_path}/ckpts/shape_enc_next_dc_f16c32_fp16"
+        )
+        self.models['shape_slat_encoder'].eval()
 
     def to(self, device: torch.device) -> None:
         self._device = device
@@ -214,6 +226,7 @@ class Trellis2TexturingPipeline(Pipeline):
         ).to(self.device)
         intersected = vertices.replace(intersected).to(self.device)
             
+        self._ensure_shape_slat_encoder()
         if self.low_vram:
             self.models['shape_slat_encoder'].to(self.device)
         shape_slat = self.models['shape_slat_encoder'](vertices, intersected)

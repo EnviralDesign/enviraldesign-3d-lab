@@ -35,10 +35,28 @@ RUN_LOG_AUTOSCROLL_JS = r"""
     scrollRunLog();
   };
 
+  const configureModelViewers = () => {
+    document.querySelectorAll("model-viewer").forEach((viewer) => {
+      if (viewer.dataset.ed3dLighting === "true") {
+        return;
+      }
+      viewer.dataset.ed3dLighting = "true";
+      viewer.setAttribute("environment-image", "neutral");
+      viewer.setAttribute("shadow-intensity", "0.95");
+      viewer.setAttribute("shadow-softness", "0.8");
+      viewer.setAttribute("exposure", "0.65");
+      viewer.setAttribute("interaction-prompt", "none");
+    });
+  };
+
   const bootObserver = new MutationObserver(attachRunLogObserver);
   bootObserver.observe(document.body, { childList: true, subtree: true });
+  const viewerObserver = new MutationObserver(configureModelViewers);
+  viewerObserver.observe(document.body, { childList: true, subtree: true });
   attachRunLogObserver();
+  configureModelViewers();
   setInterval(scrollRunLog, 1000);
+  setInterval(configureModelViewers, 1000);
 }
 """
 
