@@ -340,6 +340,12 @@ def main() -> None:
     args.func(args)
 
 
+def default_main() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["lightning-all", *sys.argv[1:]])
+    args.func(args)
+
+
 def smoke_main() -> None:
     smoke()
 

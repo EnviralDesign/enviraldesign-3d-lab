@@ -14,7 +14,7 @@ uv sync
 echo
 echo "uv sync complete."
 echo "For a Blackwell Lightning node, install the matching torch stack, native packages, and run smoke tests:"
-echo "  uv run ed3d-bootstrap lightning-all"
+echo "  uv run bootstrap"
 echo
 echo "Download UltraShape weights if needed:"
 echo "  uv run --no-sync ed3d-bootstrap ultrashape-weights"

@@ -36,21 +36,21 @@ Recommended:
 git clone <repo-url> TRELLIS.2
 cd TRELLIS.2
 uv sync
-uv run ed3d-bootstrap lightning-all
+uv run bootstrap
 uv run --no-sync dev
 ```
 
 Why `--no-sync` on launch: the lockfile targets the local RTX 5000/RTX 3070
-CUDA 12.4 stack. `ed3d-bootstrap lightning-all` deliberately replaces that
-torch stack with CUDA 13.0 wheels for Blackwell Lightning nodes. Plain
-`uv run` may try to restore the locked CUDA 12.4 packages, so use `--no-sync`
-after the Lightning bootstrap has completed.
+CUDA 12.4 stack. `uv run bootstrap` deliberately replaces that torch stack with
+CUDA 13.0 wheels for Blackwell Lightning nodes. Plain `uv run` may try to
+restore the locked CUDA 12.4 packages, so use `--no-sync` after the Lightning
+bootstrap has completed.
 
 The bootstrap command performs the steps that were validated on a Lightning
 RTX PRO 6000 Blackwell Server Edition node:
 
 ```bash
-uv run ed3d-bootstrap lightning-all
+uv run bootstrap
 ```
 
 It does the following:

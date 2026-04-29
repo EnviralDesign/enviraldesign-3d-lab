@@ -26,11 +26,11 @@ Lightning Blackwell setup:
 
 ```bash
 uv sync
-uv run ed3d-bootstrap lightning-all
+uv run bootstrap
 uv run --no-sync ed3d-remote-lab --host 0.0.0.0 --port 7860
 ```
 
-Use `--no-sync` after `ed3d-bootstrap lightning-all` because that command
+Use `--no-sync` after `uv run bootstrap` because that command
 intentionally replaces the local CUDA 12.4 torch stack with CUDA 13.0 wheels
 for Blackwell GPUs.
 
@@ -46,7 +46,7 @@ auto-selects dense attention in this order: FlashAttention-4, FlashAttention-3,
 FlashAttention-2, xFormers, then PyTorch SDPA. Sparse attention currently stays
 on xFormers.
 
-`ed3d-bootstrap lightning-all` also downloads the UltraShape checkpoint into
+`uv run bootstrap` also downloads the UltraShape checkpoint into
 `integrations/UltraShape-1.0/checkpoints/`. If you need to resume only that
 part, run:
 

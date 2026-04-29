@@ -47,6 +47,7 @@ dependencies = [
 ed3d-image-to-3d = "local_image_to_3d:main"
 ed3d-remote-lab = "tools.remote_launcher:main"
 dev = "tools.remote_launcher:dev_main"
+bootstrap = "tools.bootstrap:default_main"
 ed3d-bootstrap = "tools.bootstrap:main"
 ed3d-smoke = "tools.bootstrap:smoke_main"
 
