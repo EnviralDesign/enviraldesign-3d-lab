@@ -481,7 +481,7 @@ def select_artifact(path: str | None):
 
 
 ROI_PRESETS = {
-    "Head / face": ((0.5, 0.82, 0.5), (0.46, 0.34, 0.46)),
+    "Head / face": ((0.5, 0.91, 0.45), (0.65, 0.18, 0.9)),
     "Hair / head silhouette": ((0.5, 0.86, 0.5), (0.62, 0.34, 0.62)),
     "Torso": ((0.5, 0.58, 0.5), (0.62, 0.38, 0.52)),
     "Hands / lower arms": ((0.5, 0.42, 0.5), (0.9, 0.34, 0.65)),
@@ -1160,12 +1160,12 @@ def build_ui():
                         roi_label = gr.Textbox(label="ROI label", value="face", info="Used in output filenames.")
                     with gr.Row():
                         roi_center_x = gr.Slider(0.0, 1.0, value=0.5, step=0.01, label="Center X")
-                        roi_center_y = gr.Slider(0.0, 1.0, value=0.82, step=0.01, label="Center Y")
-                        roi_center_z = gr.Slider(0.0, 1.0, value=0.5, step=0.01, label="Center Z")
+                        roi_center_y = gr.Slider(0.0, 1.0, value=0.91, step=0.01, label="Center Y")
+                        roi_center_z = gr.Slider(0.0, 1.0, value=0.45, step=0.01, label="Center Z")
                     with gr.Row():
-                        roi_size_x = gr.Slider(0.01, 1.0, value=0.46, step=0.01, label="Size X")
-                        roi_size_y = gr.Slider(0.01, 1.0, value=0.34, step=0.01, label="Size Y")
-                        roi_size_z = gr.Slider(0.01, 1.0, value=0.46, step=0.01, label="Size Z")
+                        roi_size_x = gr.Slider(0.01, 1.0, value=0.65, step=0.01, label="Size X")
+                        roi_size_y = gr.Slider(0.01, 1.0, value=0.18, step=0.01, label="Size Y")
+                        roi_size_z = gr.Slider(0.01, 1.0, value=0.9, step=0.01, label="Size Z")
                     with gr.Row():
                         roi_context = gr.Number(label="Context multiplier", value=1.35, info="Exports an expanded context crop around the ROI.")
                         roi_fallback_faces = gr.Number(label="Fallback faces", value=2000, precision=0, info="Nearest faces to use if the ROI box misses the mesh.")
